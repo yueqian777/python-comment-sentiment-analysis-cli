@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 import logging
+import os
+from contextlib import contextmanager
 from collections import Counter
 from pathlib import Path
 
 import jieba
-import matplotlib.pyplot as plt
 import pandas as pd
 
 
@@ -68,6 +69,22 @@ STOPWORDS = {
 SENTIMENTS = ("positive", "negative", "neutral")
 
 jieba.setLogLevel(logging.WARNING)
+
+
+@contextmanager
+def silence_native_output():
+    stdout_fd = os.dup(1)
+    stderr_fd = os.dup(2)
+    try:
+        with open(os.devnull, "w", encoding="utf-8") as devnull:
+            os.dup2(devnull.fileno(), 1)
+            os.dup2(devnull.fileno(), 2)
+            yield
+    finally:
+        os.dup2(stdout_fd, 1)
+        os.dup2(stderr_fd, 2)
+        os.close(stdout_fd)
+        os.close(stderr_fd)
 
 
 def clean_text(text: object) -> str:
@@ -170,17 +187,23 @@ def save_summary_file(
 
 
 def save_sentiment_chart(summary: dict[str, dict[str, float]], output_path: str | Path) -> None:
-    labels = ["Positive", "Negative", "Neutral"]
-    values = [
-        summary["positive"]["count"],
-        summary["negative"]["count"],
-        summary["neutral"]["count"],
-    ]
+    with silence_native_output():
+        import matplotlib
 
-    plt.figure(figsize=(6, 4))
-    plt.bar(labels, values, color=["#3BA272", "#D94E5D", "#5470C6"])
-    plt.title("Comment Sentiment Count")
-    plt.ylabel("Count")
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150)
-    plt.close()
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        labels = ["Positive", "Negative", "Neutral"]
+        values = [
+            summary["positive"]["count"],
+            summary["negative"]["count"],
+            summary["neutral"]["count"],
+        ]
+
+        plt.figure(figsize=(6, 4))
+        plt.bar(labels, values, color=["#3BA272", "#D94E5D", "#5470C6"])
+        plt.title("Comment Sentiment Count")
+        plt.ylabel("Count")
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        plt.close()
