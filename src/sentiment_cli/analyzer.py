@@ -68,6 +68,8 @@ STOPWORDS = {
 
 SENTIMENTS = ("positive", "negative", "neutral")
 
+NEGATION_WORDS = ("不", "没", "没有", "不是", "无", "并不")
+
 jieba.setLogLevel(logging.WARNING)
 
 
@@ -113,13 +115,33 @@ def tokenize(text: object) -> list[str]:
     return words
 
 
+def _has_preceding_negation(text: str, word_start: int) -> bool:
+    prefix = text[max(0, word_start - 3) : word_start]
+    prefix = prefix.rsplit(" ", 1)[-1]
+    return any(negation in prefix for negation in NEGATION_WORDS)
+
+
 def classify_text(text: object) -> str:
     cleaned = clean_text(text)
     if not cleaned:
         return "neutral"
 
-    positive_score = sum(1 for word in POSITIVE_WORDS if word in cleaned)
-    negative_score = sum(1 for word in NEGATIVE_WORDS if word in cleaned)
+    positive_score = 0
+    negative_score = 0
+
+    for word in POSITIVE_WORDS:
+        for match in re.finditer(re.escape(word), cleaned):
+            if _has_preceding_negation(cleaned, match.start()):
+                negative_score += 1
+            else:
+                positive_score += 1
+
+    for word in NEGATIVE_WORDS:
+        for match in re.finditer(re.escape(word), cleaned):
+            if _has_preceding_negation(cleaned, match.start()):
+                positive_score += 1
+            else:
+                negative_score += 1
 
     if positive_score > negative_score:
         return "positive"
@@ -186,7 +208,12 @@ def save_summary_file(
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
 
 
-def save_sentiment_chart(summary: dict[str, dict[str, float]], output_path: str | Path) -> None:
+def save_sentiment_count_chart(
+    summary: dict[str, dict[str, float]], output_path: str | Path
+) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     with silence_native_output():
         import matplotlib
 
@@ -201,9 +228,45 @@ def save_sentiment_chart(summary: dict[str, dict[str, float]], output_path: str 
         ]
 
         plt.figure(figsize=(6, 4))
-        plt.bar(labels, values, color=["#3BA272", "#D94E5D", "#5470C6"])
+        bars = plt.bar(labels, values, color=["#3BA272", "#D94E5D", "#5470C6"])
         plt.title("Comment Sentiment Count")
         plt.ylabel("Count")
+        plt.bar_label(bars, labels=[str(value) for value in values], padding=3)
         plt.tight_layout()
         plt.savefig(output_path, dpi=150)
         plt.close()
+
+
+def save_sentiment_ratio_chart(
+    summary: dict[str, dict[str, float]], output_path: str | Path
+) -> None:
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with silence_native_output():
+        import matplotlib
+
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+
+        labels = ["Positive", "Negative", "Neutral"]
+        values = [
+            summary["positive"]["ratio"],
+            summary["negative"]["ratio"],
+            summary["neutral"]["ratio"],
+        ]
+
+        plt.figure(figsize=(6, 4))
+        bars = plt.bar(labels, values, color=["#3BA272", "#D94E5D", "#5470C6"])
+        plt.title("Comment Sentiment Ratio")
+        plt.ylabel("Percentage (%)")
+        plt.ylim(0, 100)
+        plt.bar_label(bars, labels=[f"{value:.2f}%" for value in values], padding=3)
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        plt.close()
+
+
+def save_sentiment_chart(summary: dict[str, dict[str, float]], output_path: str | Path) -> None:
+    """Keep the original chart helper as a count-chart compatibility alias."""
+    save_sentiment_count_chart(summary, output_path)

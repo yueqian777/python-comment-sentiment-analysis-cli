@@ -7,7 +7,8 @@ import pandas as pd
 
 from sentiment_cli.analyzer import (
     analyze_comments,
-    save_sentiment_chart,
+    save_sentiment_count_chart,
+    save_sentiment_ratio_chart,
     save_summary_file,
     sentiment_summary,
     top_keywords,
@@ -39,13 +40,15 @@ def run(args: argparse.Namespace) -> Path:
 
     classified_path = output_dir / "classified_comments.csv"
     summary_path = output_dir / "summary.txt"
-    chart_path = output_dir / "sentiment_ratio.png"
+    count_chart_path = output_dir / "sentiment_count.png"
+    ratio_chart_path = output_dir / "sentiment_ratio.png"
 
     result.to_csv(classified_path, index=False, encoding="utf-8-sig")
     save_summary_file(summary, keywords, summary_path)
 
     if not args.no_chart:
-        save_sentiment_chart(summary, chart_path)
+        save_sentiment_count_chart(summary, count_chart_path)
+        save_sentiment_ratio_chart(summary, ratio_chart_path)
 
     return output_dir
 
