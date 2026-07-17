@@ -15,9 +15,6 @@ LOGISTIC_C = 3.0
 
 
 def train_sentiment_model(texts: Sequence[str], labels: Sequence[str]) -> Pipeline:
-    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
-    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
-    # 最终逻辑由使用者审阅、修改并验证。
     if len(texts) != len(labels):
         raise ValueError("texts 和 labels 的长度必须一致")
     if len(set(labels)) < 2:

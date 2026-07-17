@@ -199,9 +199,6 @@ def tokenize(text: object, extra_stopwords: set[str] | None = None) -> list[str]
 
 
 def _single_character_spans(text: str, words: set[str]) -> set[tuple[int, int]]:
-    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
-    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
-    # 最终逻辑由使用者审阅、修改并验证。
     spans: set[tuple[int, int]] = set()
 
     for token, start, end in jieba.tokenize(text):
@@ -226,9 +223,6 @@ def _single_character_spans(text: str, words: set[str]) -> set[tuple[int, int]]:
 
 
 def find_sentiment_matches(text: object) -> list[dict[str, object]]:
-    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
-    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
-    # 最终逻辑由使用者审阅、修改并验证。
     cleaned = clean_text(text)
     occupied = [False] * len(cleaned)
     matches: list[dict[str, object]] = []

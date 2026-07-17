@@ -69,9 +69,6 @@ def cross_validate_methods(
     cv_folds: int = 5,
     random_state: int = 42,
 ) -> dict[str, object]:
-    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
-    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
-    # 最终逻辑由使用者审阅、修改并验证。
     if cv_folds < 2:
         raise ValueError("cv-folds 必须大于等于 2")
 
@@ -319,9 +316,6 @@ def _evaluate_independent_test(
     label_column: str,
     source: str,
 ) -> dict[str, object]:
-    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
-    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
-    # 最终逻辑由使用者审阅、修改并验证。
     validation = validate_labeled_data(test_data, text_column, label_column)
     validate_dataset_separation(training_data, test_data, text_column)
 
