@@ -1,7 +1,11 @@
+import hashlib
+import json
+
 import pandas as pd
 import pytest
 
-from sentiment_cli.evaluate import evaluate_sentiment_methods
+from sentiment_cli.evaluate import evaluate_csv, evaluate_sentiment_methods
+from sentiment_cli.ml_model import CHAR_NGRAM_RANGE, LOGISTIC_C, WORD_NGRAM_RANGE
 
 
 def test_evaluate_sentiment_methods_generates_report_and_chart(tmp_path):
@@ -43,6 +47,7 @@ def test_evaluate_sentiment_methods_generates_report_and_chart(tmp_path):
     assert chart_path.stat().st_size > 0
     assert "lexicon_accuracy" in report
     assert "ml_accuracy" in report
+    assert "单次分层 train_test_split" in report
     assert "classification_report" in report
     assert "confusion_matrix" in report
     assert result["used_stratify"] is True
@@ -112,7 +117,7 @@ def test_cross_validation_reports_fold_metrics_and_summary(tmp_path):
     assert (tmp_path / "metrics_comparison.png").stat().st_size > 0
 
 
-def test_evaluation_reports_fixed_independent_test(tmp_path):
+def test_evaluation_reports_fixed_holdout_set_v1(tmp_path):
     training = pd.DataFrame(
         {
             "comment": [
@@ -143,5 +148,64 @@ def test_evaluation_reports_fixed_independent_test(tmp_path):
 
     assert result["independent_test"] is not None
     assert result["independent_test"]["total"] == 6
-    assert "固定独立测试集结果" in report
+    assert "固定留出测试集 v1 结果" in report
     assert (tmp_path / "independent_confusion_matrix.png").stat().st_size > 0
+
+
+def test_evaluate_csv_writes_reproducible_metadata(tmp_path):
+    training = pd.DataFrame(
+        {
+            "comment": [
+                "味道很好", "服务满意", "值得推荐", "画面漂亮",
+                "味道很差", "服务糟糕", "不会再买", "剧情混乱",
+                "今天送达", "型号A12", "课程周二上课", "电影九十分钟",
+            ],
+            "label": ["positive"] * 4 + ["negative"] * 4 + ["neutral"] * 4,
+        }
+    )
+    holdout = pd.DataFrame(
+        {
+            "comment": [
+                "住得舒服", "讲解清楚", "饭菜难吃",
+                "房间很脏", "包装含说明书", "周五提交报告",
+            ],
+            "label": ["positive", "positive", "negative", "negative", "neutral", "neutral"],
+        }
+    )
+    training_path = tmp_path / "training.csv"
+    holdout_path = tmp_path / "holdout_v1.csv"
+    output_dir = tmp_path / "outputs"
+    training.to_csv(training_path, index=False, encoding="utf-8-sig")
+    holdout.to_csv(holdout_path, index=False, encoding="utf-8-sig")
+
+    result = evaluate_csv(
+        training_path,
+        output_dir=output_dir,
+        cv_folds=2,
+        test_input_path=holdout_path,
+    )
+
+    metadata_path = result["evaluation_metadata_path"]
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata_path.stat().st_size > 0
+    assert metadata["training_data_sha256"] == hashlib.sha256(
+        training_path.read_bytes()
+    ).hexdigest()
+    assert metadata["fixed_holdout_data_sha256"] == hashlib.sha256(
+        holdout_path.read_bytes()
+    ).hexdigest()
+    assert metadata["training_samples"] == 12
+    assert metadata["test_samples"] == 6
+    assert metadata["random_state"] == 42
+    assert metadata["cv_folds"] == 2
+    assert metadata["word_ngram_range"] == list(WORD_NGRAM_RANGE)
+    assert metadata["char_ngram_range"] == list(CHAR_NGRAM_RANGE)
+    assert metadata["logistic_regression_c"] == LOGISTIC_C
+    assert metadata["preprocessing_function"] == "sentiment_cli.analyzer.clean_text"
+    for path in (
+        result["report_path"],
+        result["confusion_matrix_path"],
+        result["metrics_comparison_path"],
+        result["independent_confusion_matrix_path"],
+    ):
+        assert path.stat().st_size > 0

@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import platform
+import subprocess
+from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from statistics import fmean, pstdev
 
 import pandas as pd
+import sklearn
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -19,7 +26,12 @@ from sentiment_cli.data_validation import (
     validate_dataset_separation,
     validate_labeled_data,
 )
-from sentiment_cli.ml_model import train_sentiment_model
+from sentiment_cli.ml_model import (
+    CHAR_NGRAM_RANGE,
+    LOGISTIC_C,
+    WORD_NGRAM_RANGE,
+    train_sentiment_model,
+)
 
 
 METRIC_NAMES = ("accuracy", "macro_precision", "macro_recall", "macro_f1")
@@ -57,6 +69,9 @@ def cross_validate_methods(
     cv_folds: int = 5,
     random_state: int = 42,
 ) -> dict[str, object]:
+    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
+    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
+    # 最终逻辑由使用者审阅、修改并验证。
     if cv_folds < 2:
         raise ValueError("cv-folds 必须大于等于 2")
 
@@ -198,16 +213,31 @@ def _build_report(
     independent_test: dict[str, object] | None,
 ) -> str:
     counts = validation["label_counts"]
+    evaluation_parts = ["单次分层 train_test_split"]
+    if cv_results is not None:
+        evaluation_parts.append(f"{cv_results['actual_folds']} 折 StratifiedKFold")
+    if independent_test is not None:
+        evaluation_parts.append("固定留出测试集 v1")
     lines = [
         "网络评论情感分析评估报告",
         f"数据总量: {validation['total']}",
         "类别数量: " + "，".join(f"{label}={counts[label]}" for label in SENTIMENTS),
-        "评估方式: 分层随机训练/测试划分 + 分层交叉验证",
+        "评估方式: " + " + ".join(evaluation_parts),
         "",
-        "训练/测试划分结果：",
+        "单次分层 train_test_split 结果：",
         f"是否使用 stratify: {holdout['split_note']}",
         f"lexicon_accuracy: {holdout['lexicon_accuracy']:.4f}",
         f"ml_accuracy: {holdout['ml_accuracy']:.4f}",
+        "词典法单次划分指标: "
+        + "，".join(
+            f"{name}={holdout['lexicon_metrics'][name]:.4f}"
+            for name in METRIC_NAMES
+        ),
+        "机器学习法单次划分指标: "
+        + "，".join(
+            f"{name}={holdout['ml_metrics'][name]:.4f}"
+            for name in METRIC_NAMES
+        ),
         "",
         "词典法 classification_report:",
         holdout["lexicon_report"],
@@ -243,26 +273,27 @@ def _build_report(
         lines.extend(
             [
                 "",
-                "固定独立测试集结果：",
+                "固定留出测试集 v1 结果：",
                 f"测试集来源: {independent_test['source']}",
                 f"测试集总量: {independent_test['total']}",
                 "测试集类别数量: "
                 + "，".join(f"{label}={test_counts[label]}" for label in SENTIMENTS),
                 "训练集与测试集清洗后重复: 0",
-                "说明: 独立测试集未用于训练、交叉验证、词典调整或参数选择。",
-                "词典法独立测试指标: "
+                "说明: 该留出集已用于上一轮评估，本轮结果用于同一留出集上的版本对比。",
+                "该集合已被开发过程查看，不能据此反复调参后再宣称未参与开发决策。",
+                "词典法固定留出指标: "
                 + "，".join(
                     f"{name}={independent_test['lexicon']['metrics'][name]:.4f}"
                     for name in METRIC_NAMES
                 ),
-                "机器学习法独立测试指标: "
+                "机器学习法固定留出指标: "
                 + "，".join(
                     f"{name}={independent_test['ml']['metrics'][name]:.4f}"
                     for name in METRIC_NAMES
                 ),
-                "词典法独立测试混淆矩阵:",
+                "词典法固定留出混淆矩阵:",
                 str(independent_test["lexicon"]["matrix"]),
-                "机器学习法独立测试混淆矩阵:",
+                "机器学习法固定留出混淆矩阵:",
                 str(independent_test["ml"]["matrix"]),
             ]
         )
@@ -271,8 +302,11 @@ def _build_report(
         [
             "",
             "方法局限说明：",
-            "本报告基于课程演示规模数据。交叉验证减少了单次随机划分的偶然性，",
-            "但指标仍受数据规模、标注质量、领域分布和词典覆盖范围影响。",
+            "单次划分受随机种子和样本组成影响较大。",
+            "交叉验证反映训练数据内部的平均稳定性。",
+            "固定留出测试集 v1 只反映当前版本在这组特定留出样本上的表现。",
+            "三组结果不一致是正常现象，不能只挑最高的一组指标进行宣传。",
+            "指标仍受数据规模、标注质量、领域分布和词典覆盖范围影响。",
         ]
     )
     return "\n".join(lines)
@@ -285,6 +319,9 @@ def _evaluate_independent_test(
     label_column: str,
     source: str,
 ) -> dict[str, object]:
+    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
+    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
+    # 最终逻辑由使用者审阅、修改并验证。
     validation = validate_labeled_data(test_data, text_column, label_column)
     validate_dataset_separation(training_data, test_data, text_column)
 
@@ -324,7 +361,7 @@ def evaluate_sentiment_methods(
     random_state: int = 42,
     cv_folds: int | None = None,
     independent_data: pd.DataFrame | None = None,
-    independent_source: str = "固定独立测试集",
+    independent_source: str = "固定留出测试集 v1",
 ) -> dict[str, object]:
     if len(data) < 6:
         raise ValueError("样本量太少，至少需要 6 条带标签评论才能划分训练集和测试集")
@@ -375,10 +412,14 @@ def evaluate_sentiment_methods(
     if not used_stratify:
         split_note = f"否（普通随机划分；降级原因：{stratify_error}）"
 
+    lexicon_metrics = _calculate_metrics(y_test, lexicon_predictions)
+    ml_metrics = _calculate_metrics(y_test, ml_predictions)
     holdout = {
         "split_note": split_note,
-        "lexicon_accuracy": float(accuracy_score(y_test, lexicon_predictions)),
-        "ml_accuracy": float(accuracy_score(y_test, ml_predictions)),
+        "lexicon_accuracy": lexicon_metrics["accuracy"],
+        "ml_accuracy": ml_metrics["accuracy"],
+        "lexicon_metrics": lexicon_metrics,
+        "ml_metrics": ml_metrics,
         "lexicon_report": classification_report(
             y_test, lexicon_predictions, labels=metric_labels, zero_division=0
         ),
@@ -447,6 +488,107 @@ def evaluate_sentiment_methods(
     }
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _package_version(package_name: str) -> str | None:
+    try:
+        return version(package_name)
+    except PackageNotFoundError:
+        return None
+
+
+def _git_commit_sha() -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    commit_sha = completed.stdout.strip()
+    return commit_sha if completed.returncode == 0 and commit_sha else None
+
+
+def _git_worktree_dirty() -> bool | None:
+    try:
+        completed = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if completed.returncode != 0:
+        return None
+    return bool(completed.stdout.strip())
+
+
+def _build_evaluation_metadata(
+    training_path: Path,
+    training_data: pd.DataFrame,
+    test_path: Path | None,
+    test_data: pd.DataFrame | None,
+    text_column: str,
+    label_column: str,
+    test_size: float,
+    random_state: int,
+    requested_cv_folds: int | None,
+    actual_cv_folds: int | None,
+) -> dict[str, object]:
+    training_counts = training_data[label_column].astype(str).str.strip().value_counts()
+    test_counts = (
+        test_data[label_column].astype(str).str.strip().value_counts()
+        if test_data is not None
+        else pd.Series(dtype="int64")
+    )
+    return {
+        "training_data_file": training_path.as_posix(),
+        "training_data_sha256": _sha256_file(training_path),
+        "fixed_holdout_data_file": test_path.as_posix() if test_path else None,
+        "fixed_holdout_data_sha256": _sha256_file(test_path) if test_path else None,
+        "fixed_holdout_version": "v1" if test_path else None,
+        "training_samples": len(training_data),
+        "test_samples": 0 if test_data is None else len(test_data),
+        "label_counts": {
+            "training": dict(sorted(training_counts.astype(int).to_dict().items())),
+            "fixed_holdout": dict(sorted(test_counts.astype(int).to_dict().items())),
+        },
+        "text_column": text_column,
+        "label_column": label_column,
+        "python_version": platform.python_version(),
+        "sklearn_version": sklearn.__version__,
+        "jieba_version": _package_version("jieba"),
+        "pandas_version": pd.__version__,
+        "test_size": test_size,
+        "random_state": random_state,
+        "cv_folds_requested": requested_cv_folds,
+        "cv_folds": actual_cv_folds,
+        "word_ngram_range": list(WORD_NGRAM_RANGE),
+        "char_ngram_range": list(CHAR_NGRAM_RANGE),
+        "logistic_regression_c": LOGISTIC_C,
+        "preprocessing_function": "sentiment_cli.analyzer.clean_text",
+        "preprocessing_location": "inside sklearn pipeline",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "git_commit_sha": _git_commit_sha(),
+        "git_worktree_dirty": _git_worktree_dirty(),
+    }
+
+
 def evaluate_csv(
     input_path: str | Path,
     text_column: str = "comment",
@@ -465,7 +607,7 @@ def evaluate_csv(
             text_column,
             label_column,
         )
-    return evaluate_sentiment_methods(
+    result = evaluate_sentiment_methods(
         data,
         text_column=text_column,
         label_column=label_column,
@@ -476,6 +618,30 @@ def evaluate_csv(
         independent_data=independent_data,
         independent_source=str(test_input_path) if test_input_path is not None else "",
     )
+    training_path = Path(input_path)
+    holdout_path = Path(test_input_path) if test_input_path is not None else None
+    metadata = _build_evaluation_metadata(
+        training_path,
+        data,
+        holdout_path,
+        independent_data,
+        text_column,
+        label_column,
+        test_size,
+        random_state,
+        cv_folds,
+        result["cv_folds"],
+    )
+    metadata_path = Path(output_dir) / "evaluation_metadata.json"
+    try:
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError as error:
+        raise ValueError(f"无法保存评估元数据：{metadata_path}") from error
+    result["evaluation_metadata_path"] = metadata_path
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -487,7 +653,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-size", type=float, default=0.3, help="测试集比例")
     parser.add_argument("--random-state", type=int, default=42, help="随机种子")
     parser.add_argument("--cv-folds", type=int, default=5, help="分层交叉验证折数")
-    parser.add_argument("--test-input", help="固定独立测试集 CSV 路径")
+    parser.add_argument("--test-input", help="固定留出测试集 v1 CSV 路径")
     return parser
 
 

@@ -133,7 +133,6 @@ SENTIMENTS = ("positive", "negative", "neutral")
 
 NEGATION_WORDS = ("不", "没", "没有", "不是", "无", "并不")
 NEGATION_GAP = 3
-SENTIMENT_WEIGHTS = {"很差": 2, "太差": 2}
 SINGLE_CHARACTER_PREFIXES = {"很", "太", "挺", "较", "更", "真", "稍", "偏"}
 
 jieba.setLogLevel(logging.WARNING)
@@ -200,6 +199,9 @@ def tokenize(text: object, extra_stopwords: set[str] | None = None) -> list[str]
 
 
 def _single_character_spans(text: str, words: set[str]) -> set[tuple[int, int]]:
+    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
+    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
+    # 最终逻辑由使用者审阅、修改并验证。
     spans: set[tuple[int, int]] = set()
 
     for token, start, end in jieba.tokenize(text):
@@ -224,6 +226,9 @@ def _single_character_spans(text: str, words: set[str]) -> set[tuple[int, int]]:
 
 
 def find_sentiment_matches(text: object) -> list[dict[str, object]]:
+    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
+    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
+    # 最终逻辑由使用者审阅、修改并验证。
     cleaned = clean_text(text)
     occupied = [False] * len(cleaned)
     matches: list[dict[str, object]] = []
@@ -298,7 +303,7 @@ def score_sentiment_text(text: object) -> dict[str, object]:
 
         score_key = f"{sentiment}_score"
         hits_key = f"{sentiment}_hits"
-        result[score_key] += SENTIMENT_WEIGHTS.get(word, 1)
+        result[score_key] += 1
         result[hits_key].append(hit_label)
 
     return result

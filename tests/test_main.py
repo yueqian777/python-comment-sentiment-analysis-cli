@@ -4,7 +4,7 @@ import joblib
 import pandas as pd
 import pytest
 
-from sentiment_cli.main import run
+from sentiment_cli.main import _analyze_with_ml, run
 from sentiment_cli.ml_model import train_sentiment_model
 
 
@@ -80,6 +80,66 @@ def test_run_ml_mode_outputs_probabilities(tmp_path):
     assert set(result["classification_method"]) == {"ml"}
     assert probability_columns <= set(result.columns)
     assert result["confidence"].between(0, 1).all()
+
+
+def test_ml_mode_keeps_cleaned_text_but_predicts_raw_comments():
+    class RecordingModel:
+        classes_ = ["positive", "negative", "neutral"]
+
+        def __init__(self):
+            self.predict_input = None
+            self.proba_input = None
+
+        def predict(self, texts):
+            self.predict_input = list(texts)
+            return ["positive"] * len(texts)
+
+        def predict_proba(self, texts):
+            self.proba_input = list(texts)
+            return [[0.8, 0.1, 0.1] for _ in texts]
+
+    model = RecordingModel()
+    raw_text = "服务很好！  https://example.com"
+
+    result = _analyze_with_ml(pd.Series([raw_text]), model, None)
+
+    assert model.predict_input == [raw_text]
+    assert model.proba_input == [raw_text]
+    assert result.loc[0, "cleaned_text"] == "服务很好"
+
+
+def test_run_ml_mode_normalizes_raw_and_clean_text_consistently(tmp_path):
+    training_texts = [
+        "服务很好 物流很快",
+        "味道满意 值得推荐",
+        "质量很差 不会再买",
+        "包装破损 非常失望",
+        "今天收到 蓝色包装",
+        "型号A12 下午送达",
+    ]
+    labels = ["positive", "positive", "negative", "negative", "neutral", "neutral"]
+    model = train_sentiment_model(training_texts, labels)
+    model_path = tmp_path / "model.joblib"
+    joblib.dump(model, model_path)
+    input_path = tmp_path / "comments.csv"
+    input_path.write_text(
+        "comment\n服务很好！物流也很快。\n服务很好 物流也很快\n",
+        encoding="utf-8-sig",
+    )
+    output_dir = tmp_path / "outputs"
+
+    run(make_args(input_path, output_dir, method="ml", model=model_path))
+
+    result = pd.read_csv(output_dir / "classified_comments.csv")
+    assert result.loc[0, "sentiment"] == result.loc[1, "sentiment"]
+    probability_columns = [
+        "positive_probability",
+        "negative_probability",
+        "neutral_probability",
+        "confidence",
+    ]
+    for column in probability_columns:
+        assert result.loc[0, column] == pytest.approx(result.loc[1, column])
 
 
 def test_run_ml_mode_requires_model(tmp_path):

@@ -104,7 +104,7 @@ def validate_dataset_separation(
     if text_column not in training_data.columns:
         raise ValueError(f"训练集找不到评论列：{text_column}")
     if text_column not in test_data.columns:
-        raise ValueError(f"独立测试集找不到评论列：{text_column}")
+        raise ValueError(f"固定留出测试集找不到评论列：{text_column}")
 
     training_texts = {
         clean_text(text)
@@ -119,7 +119,7 @@ def validate_dataset_separation(
     overlap = training_texts & test_texts
     if overlap:
         example = sorted(overlap)[0]
-        raise ValueError(f"训练集与独立测试集存在清洗后重复：{example}")
+        raise ValueError(f"训练集与固定留出测试集存在清洗后重复：{example}")
 
     return {
         "training_total": len(training_data),

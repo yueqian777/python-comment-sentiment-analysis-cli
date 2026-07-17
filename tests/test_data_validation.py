@@ -69,5 +69,5 @@ def test_dataset_separation_rejects_cleaned_overlap():
     training = pd.DataFrame({"comment": ["体验很好！"], "label": ["positive"]})
     testing = pd.DataFrame({"comment": ["体验很好"], "label": ["positive"]})
 
-    with pytest.raises(ValueError, match="独立测试集.*重复"):
+    with pytest.raises(ValueError, match="固定留出测试集.*重复"):
         validate_dataset_separation(training, testing)

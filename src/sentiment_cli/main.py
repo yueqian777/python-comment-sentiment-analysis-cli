@@ -91,10 +91,13 @@ def _analyze_with_ml(
     model,
     extra_stopwords: set[str] | None,
 ) -> pd.DataFrame:
+    # AI 辅助说明：本函数曾使用 OpenAI Codex 桌面应用辅助重构和测试设计。
+    # Windows 客户端包版本 26.707.12708.0，模型标识 GPT-5 Codex 编程代理。
+    # 最终逻辑由使用者审阅、修改并验证。
     raw_comments = ["" if pd.isna(item) else str(item) for item in comments]
     cleaned_texts = [clean_text(item) for item in raw_comments]
     try:
-        predictions = [str(item) for item in model.predict(cleaned_texts)]
+        predictions = [str(item) for item in model.predict(raw_comments)]
     except (ValueError, TypeError, AttributeError) as error:
         raise ValueError("模型预测失败，请检查模型与输入数据是否兼容") from error
 
@@ -106,7 +109,7 @@ def _analyze_with_ml(
     classes: list[str] = []
     if hasattr(model, "predict_proba"):
         try:
-            probabilities = model.predict_proba(cleaned_texts)
+            probabilities = model.predict_proba(raw_comments)
             classes = [str(item) for item in model.classes_]
         except (ValueError, TypeError, AttributeError):
             probabilities = None

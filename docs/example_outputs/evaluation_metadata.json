@@ -1,0 +1,45 @@
+{
+  "training_data_file": "data/labeled_comments.csv",
+  "training_data_sha256": "baea8f784f33ecdf9a878128712ef1f6a46dec3dccb27a4f49d552ea562245c2",
+  "fixed_holdout_data_file": "data/independent_test_comments.csv",
+  "fixed_holdout_data_sha256": "30ee726d8e81d7e355b3d7982b1c9b7fb0ee4114ed251f34a4c90264e5e30227",
+  "fixed_holdout_version": "v1",
+  "training_samples": 126,
+  "test_samples": 45,
+  "label_counts": {
+    "training": {
+      "negative": 42,
+      "neutral": 42,
+      "positive": 42
+    },
+    "fixed_holdout": {
+      "negative": 15,
+      "neutral": 15,
+      "positive": 15
+    }
+  },
+  "text_column": "comment",
+  "label_column": "label",
+  "python_version": "3.14.5",
+  "sklearn_version": "1.9.0",
+  "jieba_version": "0.42.1",
+  "pandas_version": "3.0.3",
+  "test_size": 0.3,
+  "random_state": 42,
+  "cv_folds_requested": 5,
+  "cv_folds": 5,
+  "word_ngram_range": [
+    1,
+    2
+  ],
+  "char_ngram_range": [
+    1,
+    3
+  ],
+  "logistic_regression_c": 3.0,
+  "preprocessing_function": "sentiment_cli.analyzer.clean_text",
+  "preprocessing_location": "inside sklearn pipeline",
+  "generated_at_utc": "2026-07-17T03:38:49.823045+00:00",
+  "git_commit_sha": "acf25b4a772e2a622e92c0c0cc8e0d344a06eabc",
+  "git_worktree_dirty": true
+}

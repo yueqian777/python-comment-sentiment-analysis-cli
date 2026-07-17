@@ -43,6 +43,11 @@ def train_csv(
     info_path = destination.parent / "model_info.json"
     info = {
         "algorithm": "Word + Character TF-IDF + LogisticRegression",
+        "preprocessing": {
+            "function": "sentiment_cli.analyzer.clean_text",
+            "location": "inside sklearn pipeline",
+            "external_preprocessing_required": False,
+        },
         "features": {
             "word_ngram_range": list(WORD_NGRAM_RANGE),
             "char_ngram_range": list(CHAR_NGRAM_RANGE),

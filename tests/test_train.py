@@ -28,4 +28,27 @@ def test_train_csv_saves_model_and_model_info(tmp_path):
     assert info["algorithm"] == "Word + Character TF-IDF + LogisticRegression"
     assert info["features"]["word_ngram_range"] == [1, 2]
     assert info["features"]["char_ngram_range"] == [1, 3]
+    assert info["preprocessing"] == {
+        "function": "sentiment_cli.analyzer.clean_text",
+        "location": "inside sklearn pipeline",
+        "external_preprocessing_required": False,
+    }
     assert info["label_counts"] == {"negative": 3, "neutral": 3, "positive": 3}
+
+    loaded_model = joblib.load(model_path)
+    raw_texts = [
+        "味道很好！！！",
+        "味道很好",
+        "服务糟糕 https://example.com",
+        "服务糟糕",
+        "型号A12    今天收到",
+        "型号A12 今天收到",
+    ]
+    predictions = loaded_model.predict(raw_texts)
+    probabilities = loaded_model.predict_proba(raw_texts)
+    assert predictions[0] == predictions[1]
+    assert predictions[2] == predictions[3]
+    assert predictions[4] == predictions[5]
+    assert (probabilities[0] == probabilities[1]).all()
+    assert (probabilities[2] == probabilities[3]).all()
+    assert (probabilities[4] == probabilities[5]).all()

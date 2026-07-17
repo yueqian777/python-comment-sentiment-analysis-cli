@@ -69,11 +69,21 @@ def test_overlapping_sentiment_words_are_not_scored_twice():
 
 def test_classify_text_handles_turns_and_mixed_sentiment():
     assert classify_text("很好，但是差") == "neutral"
-    assert classify_text("好，但是很差") == "negative"
+    assert classify_text("好，但是很差") == "neutral"
+    assert classify_text("外观不错，但是续航太差") == "neutral"
+    assert classify_text("服务不错，但是等待时间很长") == "positive"
     assert classify_text("不是很好，不推荐") == "negative"
     assert classify_text("价格不贵，体验不错") != "negative"
     assert classify_text("价格不贵，好吃") == "positive"
     assert classify_text("并不是不好") != "negative"
+
+
+def test_sentiment_phrases_use_uniform_weight():
+    positive = score_sentiment_text("很好")
+    negative = score_sentiment_text("很差 太差")
+
+    assert positive["positive_score"] == 1
+    assert negative["negative_score"] == 2
 
 
 def test_classify_text_does_not_carry_negation_across_punctuation():
