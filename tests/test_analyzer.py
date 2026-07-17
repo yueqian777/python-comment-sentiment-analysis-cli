@@ -2,8 +2,11 @@ from sentiment_cli.analyzer import (
     analyze_comments,
     classify_text,
     clean_text,
+    find_sentiment_matches,
+    load_stopwords,
     save_sentiment_count_chart,
     save_sentiment_ratio_chart,
+    score_sentiment_text,
     sentiment_summary,
     tokenize,
     top_keywords,
@@ -36,8 +39,46 @@ def test_classify_text_handles_negated_sentiment_words():
     assert classify_text("价格不贵，体验不错") != "negative"
 
 
+def test_longest_sentiment_word_is_matched_once():
+    assert [item["word"] for item in find_sentiment_matches("很好")] == ["很好"]
+    assert [item["word"] for item in find_sentiment_matches("很差")] == ["很差"]
+
+
+def test_overlapping_sentiment_words_are_not_scored_twice():
+    positive = score_sentiment_text("很好")
+    negative = score_sentiment_text("很差")
+
+    assert positive["positive_score"] == 1
+    assert positive["negative_score"] == 0
+    assert negative["positive_score"] == 0
+    assert len(negative["negative_hits"]) == 1
+    assert negative["negative_hits"] == ["很差"]
+
+
+def test_classify_text_handles_turns_and_mixed_sentiment():
+    assert classify_text("很好，但是差") == "neutral"
+    assert classify_text("好，但是很差") == "negative"
+    assert classify_text("不是很好，不推荐") == "negative"
+    assert classify_text("价格不贵，体验不错") != "negative"
+    assert classify_text("价格不贵，好吃") == "positive"
+    assert classify_text("并不是不好") != "negative"
+
+
 def test_classify_text_does_not_carry_negation_across_punctuation():
     assert classify_text("价格不贵，好吃") == "positive"
+
+    result = score_sentiment_text("不，贵")
+    assert result["negative_score"] == 1
+    assert result["positive_score"] == 0
+
+
+def test_score_sentiment_text_records_explanation_fields():
+    result = score_sentiment_text("价格不贵，体验不错")
+
+    assert result["positive_score"] == 2
+    assert "贵（否定反转）" in result["positive_hits"]
+    assert "不错" in result["positive_hits"]
+    assert "不贵" in result["negated_hits"]
 
 
 def test_analyze_comments_returns_rows_with_sentiment():
@@ -53,6 +94,18 @@ def test_top_keywords_counts_common_words():
 
     assert keywords[0] == ("手机", 3)
     assert len(keywords) == 2
+
+
+def test_external_stopwords_are_loaded_and_used(tmp_path):
+    stopwords_path = tmp_path / "stopwords.txt"
+    stopwords_path.write_text("# 课程演示\n手机\n\n物流\n", encoding="utf-8")
+
+    stopwords = load_stopwords(stopwords_path)
+    keywords = top_keywords(["手机 物流 速度 很快"], limit=5, extra_stopwords=stopwords)
+
+    assert stopwords == {"手机", "物流"}
+    assert "手机" not in dict(keywords)
+    assert "物流" not in dict(keywords)
 
 
 def test_sentiment_summary_counts_and_ratios():

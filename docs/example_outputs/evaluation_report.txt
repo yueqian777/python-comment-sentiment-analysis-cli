@@ -1,0 +1,77 @@
+网络评论情感分析评估报告
+数据总量: 126
+类别数量: positive=42，negative=42，neutral=42
+评估方式: 分层随机训练/测试划分 + 分层交叉验证
+
+训练/测试划分结果：
+是否使用 stratify: 是（stratify=labels）
+lexicon_accuracy: 0.9474
+ml_accuracy: 0.2632
+
+词典法 classification_report:
+              precision    recall  f1-score   support
+
+    positive       0.92      0.92      0.92        13
+    negative       0.92      1.00      0.96        12
+     neutral       1.00      0.92      0.96        13
+
+    accuracy                           0.95        38
+   macro avg       0.95      0.95      0.95        38
+weighted avg       0.95      0.95      0.95        38
+
+词典法 confusion_matrix:
+[[12  1  0]
+ [ 0 12  0]
+ [ 1  0 12]]
+
+机器学习法 classification_report:
+              precision    recall  f1-score   support
+
+    positive       0.15      0.15      0.15        13
+    negative       0.21      0.25      0.23        12
+     neutral       0.45      0.38      0.42        13
+
+    accuracy                           0.26        38
+   macro avg       0.27      0.26      0.27        38
+weighted avg       0.28      0.26      0.27        38
+
+机器学习法 confusion_matrix:
+[[2 9 2]
+ [5 3 4]
+ [6 2 5]]
+
+交叉验证折数: 5
+词典法各折指标：
+- 第 1 折：accuracy=0.9615，macro_precision=0.9630，macro_recall=0.9630，macro_f1=0.9608
+- 第 2 折：accuracy=0.8400，macro_precision=0.8442，macro_recall=0.8333，macro_f1=0.8333
+- 第 3 折：accuracy=0.9600，macro_precision=0.9630，macro_recall=0.9583，macro_f1=0.9582
+- 第 4 折：accuracy=0.9600，macro_precision=0.9630，macro_recall=0.9630，macro_f1=0.9608
+- 第 5 折：accuracy=1.0000，macro_precision=1.0000，macro_recall=1.0000，macro_f1=1.0000
+词典法平均值和标准差：
+- accuracy: 平均值=0.9443，标准差=0.0544
+- macro_precision: 平均值=0.9466，标准差=0.0532
+- macro_recall: 平均值=0.9435，标准差=0.0571
+- macro_f1: 平均值=0.9426，标准差=0.0568
+机器学习法各折指标：
+- 第 1 折：accuracy=0.4615，macro_precision=0.5311，macro_recall=0.4630，macro_f1=0.4770
+- 第 2 折：accuracy=0.3600，macro_precision=0.3428，macro_recall=0.3704，macro_f1=0.3490
+- 第 3 折：accuracy=0.3600，macro_precision=0.3333，macro_recall=0.3704，macro_f1=0.3241
+- 第 4 折：accuracy=0.3600，macro_precision=0.3788，macro_recall=0.3657，macro_f1=0.3556
+- 第 5 折：accuracy=0.2800，macro_precision=0.2540，macro_recall=0.2778，macro_f1=0.2583
+机器学习法平均值和标准差：
+- accuracy: 平均值=0.3643，标准差=0.0576
+- macro_precision: 平均值=0.3680，标准差=0.0912
+- macro_recall: 平均值=0.3694，标准差=0.0586
+- macro_f1: 平均值=0.3528，标准差=0.0710
+词典法完整交叉验证混淆矩阵:
+[[40  1  1]
+ [ 1 39  2]
+ [ 1  1 40]]
+机器学习法完整交叉验证混淆矩阵:
+[[17 19  6]
+ [23 10  9]
+ [12 11 19]]
+
+方法局限说明：
+本报告基于课程演示规模数据。交叉验证减少了单次随机划分的偶然性，
+但指标仍受数据规模、标注质量、领域分布和词典覆盖范围影响。

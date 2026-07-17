@@ -27,11 +27,40 @@ POSITIVE_WORDS = {
     "优秀",
     "清晰",
     "实惠",
+    "棒",
+    "流畅",
+    "整洁",
+    "周到",
+    "耐心",
+    "惊喜",
+    "精彩",
+    "充足",
+    "稳定",
+    "省心",
+    "新鲜",
+    "准时",
+    "友好",
+    "合理",
+    "丰富",
+    "牢固",
+    "顺手",
+    "干净",
+    "安静",
+    "热情",
+    "细致",
+    "清楚",
+    "自然",
+    "及时",
+    "可靠",
+    "合适",
+    "到位",
+    "扎实",
 }
 
 NEGATIVE_WORDS = {
     "差",
     "很差",
+    "太差",
     "失望",
     "难吃",
     "慢",
@@ -44,6 +73,35 @@ NEGATIVE_WORDS = {
     "贵",
     "敷衍",
     "不会再买",
+    "卡顿",
+    "混乱",
+    "破损",
+    "异味",
+    "延迟",
+    "太冷",
+    "凉了",
+    "太少",
+    "脏",
+    "吵",
+    "模糊",
+    "过时",
+    "死机",
+    "闪退",
+    "刺耳",
+    "压耳",
+    "油腻",
+    "难懂",
+    "粗糙",
+    "松散",
+    "生硬",
+    "无聊",
+    "漏水",
+    "拖延",
+    "失真",
+    "发热",
+    "断连",
+    "太长",
+    "比较一般",
 }
 
 STOPWORDS = {
@@ -69,6 +127,8 @@ STOPWORDS = {
 SENTIMENTS = ("positive", "negative", "neutral")
 
 NEGATION_WORDS = ("不", "没", "没有", "不是", "无", "并不")
+NEGATION_GAP = 3
+SENTIMENT_WEIGHTS = {"很差": 2, "太差": 2}
 
 jieba.setLogLevel(logging.WARNING)
 
@@ -100,48 +160,122 @@ def clean_text(text: object) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def tokenize(text: object) -> list[str]:
+def load_stopwords(path: str | Path) -> set[str]:
+    stopwords_path = Path(path)
+    if not stopwords_path.exists():
+        raise FileNotFoundError(f"找不到停用词文件：{stopwords_path}")
+
+    try:
+        lines = stopwords_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        raise ValueError(f"无法读取停用词文件：{stopwords_path}") from error
+
+    return {
+        line.strip()
+        for line in lines
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
+def tokenize(text: object, extra_stopwords: set[str] | None = None) -> list[str]:
     cleaned = clean_text(text)
     words = []
+    stopwords = STOPWORDS | (extra_stopwords or set())
 
     for word in jieba.lcut(cleaned):
         word = word.strip()
         if len(word) < 2:
             continue
-        if word in STOPWORDS:
+        if word in stopwords:
             continue
         words.append(word)
 
     return words
 
 
-def _has_preceding_negation(text: str, word_start: int) -> bool:
-    prefix = text[max(0, word_start - 3) : word_start]
-    prefix = prefix.rsplit(" ", 1)[-1]
-    return any(negation in prefix for negation in NEGATION_WORDS)
+def find_sentiment_matches(text: object) -> list[dict[str, object]]:
+    cleaned = clean_text(text)
+    occupied = [False] * len(cleaned)
+    matches: list[dict[str, object]] = []
+    words = [(word, "positive") for word in POSITIVE_WORDS]
+    words.extend((word, "negative") for word in NEGATIVE_WORDS)
+
+    for word, sentiment in sorted(words, key=lambda item: (-len(item[0]), item[0])):
+        for match in re.finditer(re.escape(word), cleaned):
+            start, end = match.span()
+            if any(occupied[start:end]):
+                continue
+
+            occupied[start:end] = [True] * (end - start)
+            matches.append(
+                {
+                    "word": word,
+                    "sentiment": sentiment,
+                    "start": start,
+                    "end": end,
+                }
+            )
+
+    return sorted(matches, key=lambda item: (int(item["start"]), -len(str(item["word"]))))
+
+
+def _find_preceding_negation(text: str, word_start: int) -> tuple[str, int] | None:
+    segment_start = text.rfind(" ", 0, word_start) + 1
+    prefix = text[segment_start:word_start]
+    candidates: list[tuple[int, str]] = []
+
+    for negation in NEGATION_WORDS:
+        position = prefix.rfind(negation)
+        if position < 0:
+            continue
+        gap = len(prefix) - position - len(negation)
+        if gap <= NEGATION_GAP:
+            candidates.append((segment_start + position, negation))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: (item[0], len(item[1])))
+
+
+def score_sentiment_text(text: object) -> dict[str, object]:
+    cleaned = clean_text(text)
+    result: dict[str, object] = {
+        "positive_score": 0,
+        "negative_score": 0,
+        "positive_hits": [],
+        "negative_hits": [],
+        "negated_hits": [],
+    }
+
+    for match in find_sentiment_matches(cleaned):
+        word = str(match["word"])
+        sentiment = str(match["sentiment"])
+        start = int(match["start"])
+        negation = _find_preceding_negation(cleaned, start)
+
+        if negation is not None:
+            negation_start, _ = negation
+            hit_text = cleaned[negation_start : int(match["end"])]
+            result["negated_hits"].append(hit_text)
+            hit_label = f"{word}（否定反转）"
+            sentiment = "negative" if sentiment == "positive" else "positive"
+        else:
+            hit_label = word
+
+        score_key = f"{sentiment}_score"
+        hits_key = f"{sentiment}_hits"
+        result[score_key] += SENTIMENT_WEIGHTS.get(word, 1)
+        result[hits_key].append(hit_label)
+
+    return result
 
 
 def classify_text(text: object) -> str:
-    cleaned = clean_text(text)
-    if not cleaned:
+    result = score_sentiment_text(text)
+    positive_score = int(result["positive_score"])
+    negative_score = int(result["negative_score"])
+    if positive_score == 0 and negative_score == 0:
         return "neutral"
-
-    positive_score = 0
-    negative_score = 0
-
-    for word in POSITIVE_WORDS:
-        for match in re.finditer(re.escape(word), cleaned):
-            if _has_preceding_negation(cleaned, match.start()):
-                negative_score += 1
-            else:
-                positive_score += 1
-
-    for word in NEGATIVE_WORDS:
-        for match in re.finditer(re.escape(word), cleaned):
-            if _has_preceding_negation(cleaned, match.start()):
-                positive_score += 1
-            else:
-                negative_score += 1
 
     if positive_score > negative_score:
         return "positive"
@@ -150,28 +284,42 @@ def classify_text(text: object) -> str:
     return "neutral"
 
 
-def analyze_comments(comments: list[str] | pd.Series) -> pd.DataFrame:
+def analyze_comments(
+    comments: list[str] | pd.Series,
+    extra_stopwords: set[str] | None = None,
+) -> pd.DataFrame:
     rows = []
 
     for comment in comments:
         cleaned = clean_text(comment)
-        words = tokenize(cleaned)
+        words = tokenize(cleaned, extra_stopwords=extra_stopwords)
+        score = score_sentiment_text(cleaned)
         rows.append(
             {
                 "comment": "" if comment is None or pd.isna(comment) else str(comment),
                 "cleaned_text": cleaned,
                 "tokens": " ".join(words),
                 "sentiment": classify_text(cleaned),
+                "classification_method": "lexicon",
+                "positive_score": score["positive_score"],
+                "negative_score": score["negative_score"],
+                "positive_hits": "|".join(score["positive_hits"]),
+                "negative_hits": "|".join(score["negative_hits"]),
+                "negated_hits": "|".join(score["negated_hits"]),
             }
         )
 
     return pd.DataFrame(rows)
 
 
-def top_keywords(comments: list[str] | pd.Series, limit: int = 10) -> list[tuple[str, int]]:
+def top_keywords(
+    comments: list[str] | pd.Series,
+    limit: int = 10,
+    extra_stopwords: set[str] | None = None,
+) -> list[tuple[str, int]]:
     counter: Counter[str] = Counter()
     for comment in comments:
-        counter.update(tokenize(comment))
+        counter.update(tokenize(comment, extra_stopwords=extra_stopwords))
 
     return counter.most_common(limit)
 
@@ -194,8 +342,9 @@ def save_summary_file(
     summary: dict[str, dict[str, float]],
     keywords: list[tuple[str, int]],
     output_path: str | Path,
+    classification_method: str = "lexicon",
 ) -> None:
-    lines = ["情感分类统计："]
+    lines = [f"分类方法：{classification_method}", "", "情感分类统计："]
     for sentiment in SENTIMENTS:
         item = summary[sentiment]
         lines.append(f"- {sentiment}: {item['count']} 条，占比 {item['ratio']}%")

@@ -84,3 +84,29 @@ def test_evaluate_sentiment_methods_rejects_too_few_samples(tmp_path):
 
     with pytest.raises(ValueError, match="样本量太少"):
         evaluate_sentiment_methods(data, output_dir=tmp_path)
+
+
+def test_cross_validation_reports_fold_metrics_and_summary(tmp_path):
+    data = pd.DataFrame(
+        {
+            "comment": [
+                "味道很好值得推荐", "服务周到十分满意", "电影精彩演员优秀",
+                "课程清晰收获很多", "房间舒服位置方便", "配送很快包装漂亮",
+                "味道很差非常失望", "服务敷衍不会再买", "剧情混乱体验糟糕",
+                "课程难懂讲解很差", "房间很脏令人失望", "配送太慢饭菜难吃",
+                "今天上午收到商品", "电影时长两个小时", "课程安排在周一",
+                "酒店位于市中心", "外卖使用纸质包装", "商品颜色是蓝色",
+            ],
+            "label": ["positive"] * 6 + ["negative"] * 6 + ["neutral"] * 6,
+        }
+    )
+
+    result = evaluate_sentiment_methods(data, output_dir=tmp_path, cv_folds=3)
+    report = (tmp_path / "evaluation_report.txt").read_text(encoding="utf-8")
+
+    assert result["cv_folds"] == 3
+    assert len(result["cv_results"]["lexicon"]["folds"]) == 3
+    assert "交叉验证折数: 3" in report
+    assert "平均值" in report
+    assert "标准差" in report
+    assert (tmp_path / "metrics_comparison.png").stat().st_size > 0
