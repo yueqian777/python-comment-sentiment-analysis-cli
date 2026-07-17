@@ -1,6 +1,6 @@
 # 网络评论情感分析系统
 
-这是一个命令行版 Python 课程项目，用于分析商品、外卖、酒店、电影、课程和数码产品评论。系统支持可解释的词典法，以及词级与字符级 TF-IDF + LogisticRegression 机器学习法，最终把评论分为 `positive`、`negative`、`neutral` 三类。
+这是一个支持命令行和 Streamlit 图形界面的 Python 课程项目，用于分析商品、外卖、酒店、电影、课程和数码产品评论。系统支持可解释的词典法，以及词级与字符级 TF-IDF + LogisticRegression 机器学习法，最终把评论分为 `positive`、`negative`、`neutral` 三类。
 
 ## 系统流程
 
@@ -38,10 +38,13 @@ flowchart LR
 src/sentiment_cli/
   analyzer.py          文本处理、词典分类、关键词和图表
   data_validation.py   标注数据检查
+  inference.py         CLI 与界面共用的推理接口
+  ui_helpers.py        图表、筛选和下载数据处理
   ml_model.py          词级与字符级 TF-IDF + LogisticRegression
   train.py             最终模型训练与保存
   main.py              lexicon / ml 实际分析入口
   evaluate.py          holdout 与交叉验证评估
+app.py                 Streamlit 图形化分析平台
 data/
   sample_comments.csv
   labeled_comments.csv
@@ -61,6 +64,33 @@ python -m venv .venv
 ```
 
 `joblib` 是 scikit-learn 使用的模型序列化工具，项目已在依赖中显式声明。
+
+## 图形化界面
+
+安装依赖和当前项目后启动：
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install -e .
+python -m streamlit run app.py
+```
+
+界面包含四个页面：
+
+- **单条评论分析**：输入一条评论，切换词典法或机器学习法，查看命中词、得分、概率和置信度。
+- **CSV 批量分析**：上传 CSV、选择评论列和可选停用词，查看数量、占比、关键词、置信度及筛选明细。
+- **模型与评估**：查看默认模型状态，在界面中训练模型或重新运行默认评估。
+- **系统说明**：查看两种分类流程、当前模型参数和使用边界。
+
+首次使用机器学习法时，可在“模型与评估”页面点击“使用默认标注数据训练模型”，也可以继续使用原有命令行训练：
+
+```powershell
+python -m sentiment_cli.train `
+  --input data/labeled_comments.csv `
+  --model models/sentiment_model.joblib
+```
+
+推荐答辩演示流程：启动应用，分析一条评论并切换两种方法，上传 `data/sample_comments.csv`，展示情感占比和关键词，筛选负面或低置信度评论，查看三组评估对比，最后下载 CSV 和摘要。
 
 ## 检查标注数据
 
@@ -161,6 +191,7 @@ python -m sentiment_cli.evaluate `
 - `metrics_comparison.png`
 - `independent_confusion_matrix.png`
 - `evaluation_metadata.json`
+- `evaluation_results.json`
 
 ### 当前真实评估结果
 

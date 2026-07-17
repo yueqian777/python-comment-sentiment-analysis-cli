@@ -1,24 +1,28 @@
 from __future__ import annotations
 
 import argparse
-import pickle
 from pathlib import Path
 
-import joblib
 import pandas as pd
 
 from sentiment_cli.analyzer import (
-    SENTIMENTS,
-    analyze_comments,
     clean_text,
     load_stopwords,
     save_sentiment_count_chart,
     save_sentiment_ratio_chart,
     save_summary_file,
     sentiment_summary,
-    tokenize,
     top_keywords,
 )
+from sentiment_cli.inference import (
+    analyze_comments_by_method,
+    analyze_ml_comments,
+    load_sentiment_model,
+)
+
+
+_load_model = load_sentiment_model
+_analyze_with_ml = analyze_ml_comments
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,86 +65,6 @@ def _read_comments(input_path: Path, column: str) -> pd.DataFrame:
     return data
 
 
-def _load_model(model_path: str | None):
-    if not model_path:
-        raise ValueError("method=ml 时必须提供 --model")
-
-    path = Path(model_path)
-    if not path.exists():
-        raise FileNotFoundError(f"找不到模型文件：{path}")
-    try:
-        model = joblib.load(path)
-    except (
-        OSError,
-        EOFError,
-        ImportError,
-        AttributeError,
-        TypeError,
-        ValueError,
-        pickle.UnpicklingError,
-    ) as error:
-        raise ValueError(f"模型文件无法加载：{path}") from error
-
-    if not hasattr(model, "predict"):
-        raise ValueError("模型文件无法加载：对象不支持 predict()")
-    return model
-
-
-def _analyze_with_ml(
-    comments: pd.Series,
-    model,
-    extra_stopwords: set[str] | None,
-) -> pd.DataFrame:
-    raw_comments = ["" if pd.isna(item) else str(item) for item in comments]
-    cleaned_texts = [clean_text(item) for item in raw_comments]
-    try:
-        predictions = [str(item) for item in model.predict(raw_comments)]
-    except (ValueError, TypeError, AttributeError) as error:
-        raise ValueError("模型预测失败，请检查模型与输入数据是否兼容") from error
-
-    invalid = sorted(set(predictions) - set(SENTIMENTS))
-    if invalid:
-        raise ValueError("模型输出了非法标签：" + "、".join(invalid))
-
-    probabilities = None
-    classes: list[str] = []
-    if hasattr(model, "predict_proba"):
-        try:
-            probabilities = model.predict_proba(raw_comments)
-            classes = [str(item) for item in model.classes_]
-        except (ValueError, TypeError, AttributeError):
-            probabilities = None
-            classes = []
-
-    rows = []
-    for index, (comment, cleaned, prediction) in enumerate(
-        zip(raw_comments, cleaned_texts, predictions)
-    ):
-        probability_by_label: dict[str, float] = {}
-        if probabilities is not None:
-            probability_by_label = {
-                label: round(float(value), 6)
-                for label, value in zip(classes, probabilities[index])
-                if label in SENTIMENTS
-            }
-
-        rows.append(
-            {
-                "comment": comment,
-                "cleaned_text": cleaned,
-                "tokens": " ".join(tokenize(cleaned, extra_stopwords=extra_stopwords)),
-                "sentiment": prediction,
-                "classification_method": "ml",
-                "confidence": probability_by_label.get(prediction),
-                "positive_probability": probability_by_label.get("positive"),
-                "negative_probability": probability_by_label.get("negative"),
-                "neutral_probability": probability_by_label.get("neutral"),
-            }
-        )
-
-    return pd.DataFrame(rows)
-
-
 def run(args: argparse.Namespace) -> Path:
     method = getattr(args, "method", "lexicon")
     model_path = getattr(args, "model", None)
@@ -157,11 +81,13 @@ def run(args: argparse.Namespace) -> Path:
     data = _read_comments(input_path, args.column)
     extra_stopwords = load_stopwords(stopwords_path) if stopwords_path else None
 
-    if method == "lexicon":
-        result = analyze_comments(data[args.column], extra_stopwords=extra_stopwords)
-    else:
-        model = _load_model(model_path)
-        result = _analyze_with_ml(data[args.column], model, extra_stopwords)
+    model = load_sentiment_model(model_path) if method == "ml" else None
+    result = analyze_comments_by_method(
+        data[args.column],
+        method,
+        model=model,
+        extra_stopwords=extra_stopwords,
+    )
 
     summary = sentiment_summary(result["sentiment"])
     keywords = top_keywords(

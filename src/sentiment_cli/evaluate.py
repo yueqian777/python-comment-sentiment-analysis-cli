@@ -63,6 +63,76 @@ def _summarize_metrics(folds: list[dict[str, float]]) -> dict[str, dict[str, flo
     }
 
 
+def _structured_method_result(metrics: dict[str, float], matrix) -> dict[str, object]:
+    result: dict[str, object] = {
+        name: float(metrics[name])
+        for name in METRIC_NAMES
+    }
+    result["confusion_matrix"] = matrix.tolist()
+    return result
+
+
+def _structured_cv_method(result: dict[str, object]) -> dict[str, object]:
+    summary = result["summary"]
+    return {
+        "mean": {
+            name: float(summary[name]["mean"])
+            for name in METRIC_NAMES
+        },
+        "std": {
+            name: float(summary[name]["std"])
+            for name in METRIC_NAMES
+        },
+        "fold_metrics": [
+            {name: float(fold[name]) for name in METRIC_NAMES}
+            for fold in result["folds"]
+        ],
+        "confusion_matrix": result["matrix"].tolist(),
+    }
+
+
+def _build_evaluation_results(
+    holdout: dict[str, object],
+    cv_results: dict[str, object] | None,
+    independent_test: dict[str, object] | None,
+) -> dict[str, object]:
+    cross_validation = None
+    if cv_results is not None:
+        cross_validation = {
+            "folds": int(cv_results["actual_folds"]),
+            "lexicon": _structured_cv_method(cv_results["lexicon"]),
+            "ml": _structured_cv_method(cv_results["ml"]),
+        }
+
+    fixed_holdout = None
+    if independent_test is not None:
+        fixed_holdout = {
+            "lexicon": _structured_method_result(
+                independent_test["lexicon"]["metrics"],
+                independent_test["lexicon"]["matrix"],
+            ),
+            "ml": _structured_method_result(
+                independent_test["ml"]["metrics"],
+                independent_test["ml"]["matrix"],
+            ),
+        }
+
+    return {
+        "holdout": {
+            "lexicon": _structured_method_result(
+                holdout["lexicon_metrics"],
+                holdout["lexicon_matrix"],
+            ),
+            "ml": _structured_method_result(
+                holdout["ml_metrics"],
+                holdout["ml_matrix"],
+            ),
+        },
+        "cross_validation": cross_validation,
+        "fixed_holdout_v1": fixed_holdout,
+    }
+
+
 def cross_validate_methods(
     texts: pd.Series,
     labels: pd.Series,
@@ -439,11 +509,21 @@ def evaluate_sentiment_methods(
         )
 
     destination = Path(output_dir)
+    evaluation_results = _build_evaluation_results(
+        holdout,
+        cv_results,
+        independent_test,
+    )
     try:
         destination.mkdir(parents=True, exist_ok=True)
         report_path = destination / "evaluation_report.txt"
         report_path.write_text(
             _build_report(validation, holdout, cv_results, independent_test),
+            encoding="utf-8",
+        )
+        evaluation_results_path = destination / "evaluation_results.json"
+        evaluation_results_path.write_text(
+            json.dumps(evaluation_results, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         chart_path = destination / "confusion_matrix.png"
@@ -469,10 +549,12 @@ def evaluate_sentiment_methods(
     return {
         "lexicon_accuracy": holdout["lexicon_accuracy"],
         "ml_accuracy": holdout["ml_accuracy"],
+        "holdout_results": holdout,
         "used_stratify": used_stratify,
         "cv_folds": None if cv_results is None else cv_results["actual_folds"],
         "cv_results": cv_results,
         "independent_test": independent_test,
+        "evaluation_results_path": evaluation_results_path,
         "report_path": report_path,
         "confusion_matrix_path": chart_path,
         "metrics_comparison_path": metrics_path if cv_results is not None else None,

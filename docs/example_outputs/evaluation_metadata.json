@@ -39,7 +39,7 @@
   "logistic_regression_c": 3.0,
   "preprocessing_function": "sentiment_cli.analyzer.clean_text",
   "preprocessing_location": "inside sklearn pipeline",
-  "generated_at_utc": "2026-07-17T03:40:52.677103+00:00",
-  "git_commit_sha": "fb0d335d4ac443befcd9170cf71eb86defc12318",
-  "git_worktree_dirty": false
+  "generated_at_utc": "2026-07-17T06:06:19.965813+00:00",
+  "git_commit_sha": "85a7042acd4a93ea3b5d921ba528dc8e44ad8611",
+  "git_worktree_dirty": true
 }

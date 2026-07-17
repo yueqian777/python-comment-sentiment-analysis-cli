@@ -207,5 +207,123 @@ def test_evaluate_csv_writes_reproducible_metadata(tmp_path):
         result["confusion_matrix_path"],
         result["metrics_comparison_path"],
         result["independent_confusion_matrix_path"],
+        result["evaluation_results_path"],
     ):
         assert path.stat().st_size > 0
+
+
+def test_evaluation_results_json_uses_real_evaluation_values(tmp_path):
+    training = pd.DataFrame(
+        {
+            "comment": [
+                "味道很好", "服务满意", "值得推荐", "画面漂亮",
+                "味道很差", "服务糟糕", "不会再买", "剧情混乱",
+                "今天送达", "型号A12", "课程周二上课", "电影九十分钟",
+            ],
+            "label": ["positive"] * 4 + ["negative"] * 4 + ["neutral"] * 4,
+        }
+    )
+    fixed_holdout = pd.DataFrame(
+        {
+            "comment": [
+                "住得舒服", "讲解清楚", "饭菜难吃",
+                "房间很脏", "包装含说明书", "周五提交报告",
+            ],
+            "label": ["positive", "positive", "negative", "negative", "neutral", "neutral"],
+        }
+    )
+
+    result = evaluate_sentiment_methods(
+        training,
+        output_dir=tmp_path,
+        cv_folds=2,
+        independent_data=fixed_holdout,
+    )
+
+    results_path = result["evaluation_results_path"]
+    structured = json.loads(results_path.read_text(encoding="utf-8"))
+    assert results_path == tmp_path / "evaluation_results.json"
+    assert results_path.stat().st_size > 0
+    assert set(structured) == {"holdout", "cross_validation", "fixed_holdout_v1"}
+
+    for method in ("lexicon", "ml"):
+        metric_fields = {
+            "accuracy", "macro_precision", "macro_recall", "macro_f1",
+            "confusion_matrix",
+        }
+        assert set(structured["holdout"][method]) == metric_fields
+        assert set(structured["fixed_holdout_v1"][method]) == metric_fields
+        assert set(structured["cross_validation"][method]) == {
+            "mean", "std", "fold_metrics", "confusion_matrix",
+        }
+
+        holdout_metrics = result["holdout_results"][f"{method}_metrics"]
+        holdout_matrix = result["holdout_results"][f"{method}_matrix"].tolist()
+        for metric, expected in holdout_metrics.items():
+            assert structured["holdout"][method][metric] == pytest.approx(expected)
+        assert structured["holdout"][method]["confusion_matrix"] == holdout_matrix
+
+        cv_method = result["cv_results"][method]
+        expected_mean = {
+            metric: cv_method["summary"][metric]["mean"]
+            for metric in cv_method["summary"]
+        }
+        expected_std = {
+            metric: cv_method["summary"][metric]["std"]
+            for metric in cv_method["summary"]
+        }
+        assert structured["cross_validation"][method]["mean"] == pytest.approx(
+            expected_mean
+        )
+        assert structured["cross_validation"][method]["std"] == pytest.approx(
+            expected_std
+        )
+        for actual, expected in zip(
+            structured["cross_validation"][method]["fold_metrics"],
+            cv_method["folds"],
+        ):
+            assert actual == pytest.approx(expected)
+        assert structured["cross_validation"][method]["confusion_matrix"] == (
+            cv_method["matrix"].tolist()
+        )
+
+        fixed_method = result["independent_test"][method]
+        for metric, expected in fixed_method["metrics"].items():
+            assert structured["fixed_holdout_v1"][method][metric] == pytest.approx(
+                expected
+            )
+        assert structured["fixed_holdout_v1"][method]["confusion_matrix"] == (
+            fixed_method["matrix"].tolist()
+        )
+
+    assert structured["cross_validation"]["folds"] == 2
+    matrices = [
+        structured["holdout"]["lexicon"]["confusion_matrix"],
+        structured["cross_validation"]["ml"]["confusion_matrix"],
+        structured["fixed_holdout_v1"]["lexicon"]["confusion_matrix"],
+    ]
+    assert all(isinstance(matrix, list) for matrix in matrices)
+    assert all(isinstance(row, list) for matrix in matrices for row in matrix)
+
+
+def test_evaluation_results_json_uses_null_for_skipped_evaluations(tmp_path):
+    data = pd.DataFrame(
+        {
+            "comment": [
+                "味道很好值得推荐", "服务周到体验满意", "电影精彩演员优秀",
+                "味道很差非常失望", "服务敷衍不会再买", "电影无聊剧情糟糕",
+                "今天上午收到商品", "电影时长两个小时", "课程安排在周一",
+            ],
+            "label": ["positive"] * 3 + ["negative"] * 3 + ["neutral"] * 3,
+        }
+    )
+
+    result = evaluate_sentiment_methods(data, output_dir=tmp_path)
+    structured = json.loads(
+        result["evaluation_results_path"].read_text(encoding="utf-8")
+    )
+
+    assert structured["holdout"] is not None
+    assert structured["cross_validation"] is None
+    assert structured["fixed_holdout_v1"] is None
+    assert result["evaluation_results_path"].stat().st_size > 0

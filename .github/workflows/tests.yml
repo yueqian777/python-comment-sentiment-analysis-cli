@@ -10,6 +10,7 @@ jobs:
     env:
       MPLBACKEND: Agg
       PYTHONUTF8: "1"
+      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
 
     steps:
       - uses: actions/checkout@v4
