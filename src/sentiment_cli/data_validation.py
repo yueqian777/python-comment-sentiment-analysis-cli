@@ -96,6 +96,38 @@ def load_labeled_csv(
     return data, result
 
 
+def validate_dataset_separation(
+    training_data: pd.DataFrame,
+    test_data: pd.DataFrame,
+    text_column: str = "comment",
+) -> dict[str, int]:
+    if text_column not in training_data.columns:
+        raise ValueError(f"训练集找不到评论列：{text_column}")
+    if text_column not in test_data.columns:
+        raise ValueError(f"独立测试集找不到评论列：{text_column}")
+
+    training_texts = {
+        clean_text(text)
+        for text in training_data[text_column].fillna("").astype(str)
+        if clean_text(text)
+    }
+    test_texts = {
+        clean_text(text)
+        for text in test_data[text_column].fillna("").astype(str)
+        if clean_text(text)
+    }
+    overlap = training_texts & test_texts
+    if overlap:
+        example = sorted(overlap)[0]
+        raise ValueError(f"训练集与独立测试集存在清洗后重复：{example}")
+
+    return {
+        "training_total": len(training_data),
+        "test_total": len(test_data),
+        "cleaned_overlap": 0,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="检查情感标注 CSV 数据")
     parser.add_argument("-i", "--input", required=True, help="带标签 CSV 文件路径")

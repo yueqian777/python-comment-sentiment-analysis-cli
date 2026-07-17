@@ -55,6 +55,7 @@ POSITIVE_WORDS = {
     "合适",
     "到位",
     "扎实",
+    "好评",
 }
 
 NEGATIVE_WORDS = {
@@ -102,6 +103,10 @@ NEGATIVE_WORDS = {
     "断连",
     "太长",
     "比较一般",
+    "差评",
+    "昂贵",
+    "缓慢",
+    "吵闹",
 }
 
 STOPWORDS = {
@@ -129,6 +134,7 @@ SENTIMENTS = ("positive", "negative", "neutral")
 NEGATION_WORDS = ("不", "没", "没有", "不是", "无", "并不")
 NEGATION_GAP = 3
 SENTIMENT_WEIGHTS = {"很差": 2, "太差": 2}
+SINGLE_CHARACTER_PREFIXES = {"很", "太", "挺", "较", "更", "真", "稍", "偏"}
 
 jieba.setLogLevel(logging.WARNING)
 
@@ -193,16 +199,44 @@ def tokenize(text: object, extra_stopwords: set[str] | None = None) -> list[str]
     return words
 
 
+def _single_character_spans(text: str, words: set[str]) -> set[tuple[int, int]]:
+    spans: set[tuple[int, int]] = set()
+
+    for token, start, end in jieba.tokenize(text):
+        if token in words:
+            spans.add((start, end))
+            continue
+
+        word = token[-1:]
+        if word not in words:
+            continue
+
+        prefix = token[:-1]
+        has_modifier = prefix in SINGLE_CHARACTER_PREFIXES
+        has_negation = any(
+            prefix.startswith(negation) and len(prefix) - len(negation) <= 2
+            for negation in NEGATION_WORDS
+        )
+        if has_modifier or has_negation:
+            spans.add((end - 1, end))
+
+    return spans
+
+
 def find_sentiment_matches(text: object) -> list[dict[str, object]]:
     cleaned = clean_text(text)
     occupied = [False] * len(cleaned)
     matches: list[dict[str, object]] = []
     words = [(word, "positive") for word in POSITIVE_WORDS]
     words.extend((word, "negative") for word in NEGATIVE_WORDS)
+    single_words = {word for word, _ in words if len(word) == 1}
+    valid_single_spans = _single_character_spans(cleaned, single_words)
 
     for word, sentiment in sorted(words, key=lambda item: (-len(item[0]), item[0])):
         for match in re.finditer(re.escape(word), cleaned):
             start, end = match.span()
+            if len(word) == 1 and (start, end) not in valid_single_spans:
+                continue
             if any(occupied[start:end]):
                 continue
 

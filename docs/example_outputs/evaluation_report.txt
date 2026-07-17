@@ -6,7 +6,7 @@
 训练/测试划分结果：
 是否使用 stratify: 是（stratify=labels）
 lexicon_accuracy: 0.9474
-ml_accuracy: 0.2632
+ml_accuracy: 0.3947
 
 词典法 classification_report:
               precision    recall  f1-score   support
@@ -27,50 +27,67 @@ weighted avg       0.95      0.95      0.95        38
 机器学习法 classification_report:
               precision    recall  f1-score   support
 
-    positive       0.15      0.15      0.15        13
-    negative       0.21      0.25      0.23        12
-     neutral       0.45      0.38      0.42        13
+    positive       0.21      0.23      0.22        13
+    negative       0.29      0.33      0.31        12
+     neutral       0.80      0.62      0.70        13
 
-    accuracy                           0.26        38
-   macro avg       0.27      0.26      0.27        38
-weighted avg       0.28      0.26      0.27        38
+    accuracy                           0.39        38
+   macro avg       0.43      0.39      0.41        38
+weighted avg       0.44      0.39      0.41        38
 
 机器学习法 confusion_matrix:
-[[2 9 2]
- [5 3 4]
- [6 2 5]]
+[[3 9 1]
+ [7 4 1]
+ [4 1 8]]
 
 交叉验证折数: 5
 词典法各折指标：
-- 第 1 折：accuracy=0.9615，macro_precision=0.9630，macro_recall=0.9630，macro_f1=0.9608
+- 第 1 折：accuracy=0.9231，macro_precision=0.9250，macro_recall=0.9213，macro_f1=0.9212
 - 第 2 折：accuracy=0.8400，macro_precision=0.8442，macro_recall=0.8333，macro_f1=0.8333
-- 第 3 折：accuracy=0.9600，macro_precision=0.9630，macro_recall=0.9583，macro_f1=0.9582
+- 第 3 折：accuracy=0.9200，macro_precision=0.9250，macro_recall=0.9167，macro_f1=0.9186
 - 第 4 折：accuracy=0.9600，macro_precision=0.9630，macro_recall=0.9630，macro_f1=0.9608
 - 第 5 折：accuracy=1.0000，macro_precision=1.0000，macro_recall=1.0000，macro_f1=1.0000
 词典法平均值和标准差：
-- accuracy: 平均值=0.9443，标准差=0.0544
-- macro_precision: 平均值=0.9466，标准差=0.0532
-- macro_recall: 平均值=0.9435，标准差=0.0571
-- macro_f1: 平均值=0.9426，标准差=0.0568
+- accuracy: 平均值=0.9286，标准差=0.0530
+- macro_precision: 平均值=0.9314，标准差=0.0518
+- macro_recall: 平均值=0.9269，标准差=0.0557
+- macro_f1: 平均值=0.9268，标准差=0.0554
 机器学习法各折指标：
-- 第 1 折：accuracy=0.4615，macro_precision=0.5311，macro_recall=0.4630，macro_f1=0.4770
-- 第 2 折：accuracy=0.3600，macro_precision=0.3428，macro_recall=0.3704，macro_f1=0.3490
-- 第 3 折：accuracy=0.3600，macro_precision=0.3333，macro_recall=0.3704，macro_f1=0.3241
-- 第 4 折：accuracy=0.3600，macro_precision=0.3788，macro_recall=0.3657，macro_f1=0.3556
-- 第 5 折：accuracy=0.2800，macro_precision=0.2540，macro_recall=0.2778，macro_f1=0.2583
+- 第 1 折：accuracy=0.5385，macro_precision=0.5795，macro_recall=0.5370，macro_f1=0.5497
+- 第 2 折：accuracy=0.5200，macro_precision=0.5726，macro_recall=0.5278，macro_f1=0.5302
+- 第 3 折：accuracy=0.5600，macro_precision=0.5556，macro_recall=0.5694，macro_f1=0.5538
+- 第 4 折：accuracy=0.5200，macro_precision=0.5498，macro_recall=0.5231，macro_f1=0.5292
+- 第 5 折：accuracy=0.4400，macro_precision=0.3359，macro_recall=0.4259，macro_f1=0.3726
 机器学习法平均值和标准差：
-- accuracy: 平均值=0.3643，标准差=0.0576
-- macro_precision: 平均值=0.3680，标准差=0.0912
-- macro_recall: 平均值=0.3694，标准差=0.0586
-- macro_f1: 平均值=0.3528，标准差=0.0710
+- accuracy: 平均值=0.5157，标准差=0.0406
+- macro_precision: 平均值=0.5187，标准差=0.0920
+- macro_recall: 平均值=0.5167，标准差=0.0482
+- macro_f1: 平均值=0.5071，标准差=0.0680
 词典法完整交叉验证混淆矩阵:
 [[40  1  1]
- [ 1 39  2]
- [ 1  1 40]]
+ [ 1 38  3]
+ [ 1  2 39]]
 机器学习法完整交叉验证混淆矩阵:
-[[17 19  6]
- [23 10  9]
- [12 11 19]]
+[[19 18  5]
+ [22 16  4]
+ [ 7  5 30]]
+
+固定独立测试集结果：
+测试集来源: data/independent_test_comments.csv
+测试集总量: 45
+测试集类别数量: positive=15，negative=15，neutral=15
+训练集与测试集清洗后重复: 0
+说明: 独立测试集未用于训练、交叉验证、词典调整或参数选择。
+词典法独立测试指标: accuracy=0.6889，macro_precision=0.8062，macro_recall=0.6889，macro_f1=0.6941
+机器学习法独立测试指标: accuracy=0.8222，macro_precision=0.8323，macro_recall=0.8222，macro_f1=0.8234
+词典法独立测试混淆矩阵:
+[[ 8  0  7]
+ [ 0  9  6]
+ [ 0  1 14]]
+机器学习法独立测试混淆矩阵:
+[[11  3  1]
+ [ 2 13  0]
+ [ 0  2 13]]
 
 方法局限说明：
 本报告基于课程演示规模数据。交叉验证减少了单次随机划分的偶然性，

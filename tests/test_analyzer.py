@@ -44,6 +44,18 @@ def test_longest_sentiment_word_is_matched_once():
     assert [item["word"] for item in find_sentiment_matches("很差")] == ["很差"]
 
 
+def test_single_character_words_do_not_match_inside_other_words():
+    assert classify_text("我的爱好是摄影") == "neutral"
+    assert classify_text("两个方案存在差异") == "neutral"
+    assert classify_text("快递在下午送到") == "neutral"
+
+
+def test_single_character_words_still_match_as_real_tokens():
+    assert classify_text("质量好") == "positive"
+    assert classify_text("质量差") == "negative"
+    assert classify_text("价格不贵") == "positive"
+
+
 def test_overlapping_sentiment_words_are_not_scored_twice():
     positive = score_sentiment_text("很好")
     negative = score_sentiment_text("很差")

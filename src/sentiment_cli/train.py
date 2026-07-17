@@ -10,7 +10,12 @@ import joblib
 import sklearn
 
 from sentiment_cli.data_validation import load_labeled_csv
-from sentiment_cli.ml_model import train_sentiment_model
+from sentiment_cli.ml_model import (
+    CHAR_NGRAM_RANGE,
+    LOGISTIC_C,
+    WORD_NGRAM_RANGE,
+    train_sentiment_model,
+)
 
 
 def train_csv(
@@ -37,7 +42,12 @@ def train_csv(
 
     info_path = destination.parent / "model_info.json"
     info = {
-        "algorithm": "TF-IDF + LogisticRegression",
+        "algorithm": "Word + Character TF-IDF + LogisticRegression",
+        "features": {
+            "word_ngram_range": list(WORD_NGRAM_RANGE),
+            "char_ngram_range": list(CHAR_NGRAM_RANGE),
+            "logistic_regression_c": LOGISTIC_C,
+        },
         "training_samples": len(data),
         "label_counts": dict(sorted(validation["label_counts"].items())),
         "labels": sorted(validation["label_counts"]),

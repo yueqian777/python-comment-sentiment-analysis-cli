@@ -25,5 +25,7 @@ def test_train_csv_saves_model_and_model_info(tmp_path):
         "positive", "negative", "neutral"
     }
     assert info["training_samples"] == 9
-    assert info["algorithm"] == "TF-IDF + LogisticRegression"
+    assert info["algorithm"] == "Word + Character TF-IDF + LogisticRegression"
+    assert info["features"]["word_ngram_range"] == [1, 2]
+    assert info["features"]["char_ngram_range"] == [1, 3]
     assert info["label_counts"] == {"negative": 3, "neutral": 3, "positive": 3}

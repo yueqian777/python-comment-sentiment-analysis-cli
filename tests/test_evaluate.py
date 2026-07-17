@@ -110,3 +110,38 @@ def test_cross_validation_reports_fold_metrics_and_summary(tmp_path):
     assert "平均值" in report
     assert "标准差" in report
     assert (tmp_path / "metrics_comparison.png").stat().st_size > 0
+
+
+def test_evaluation_reports_fixed_independent_test(tmp_path):
+    training = pd.DataFrame(
+        {
+            "comment": [
+                "味道很好", "服务满意", "值得推荐", "画面漂亮",
+                "味道很差", "服务糟糕", "不会再买", "剧情混乱",
+                "今天送达", "型号A12", "课程周二上课", "电影九十分钟",
+            ],
+            "label": ["positive"] * 4 + ["negative"] * 4 + ["neutral"] * 4,
+        }
+    )
+    independent = pd.DataFrame(
+        {
+            "comment": [
+                "住得舒服", "讲解清楚", "饭菜难吃",
+                "房间很脏", "包装含说明书", "周五提交报告",
+            ],
+            "label": ["positive", "positive", "negative", "negative", "neutral", "neutral"],
+        }
+    )
+
+    result = evaluate_sentiment_methods(
+        training,
+        output_dir=tmp_path,
+        cv_folds=2,
+        independent_data=independent,
+    )
+    report = (tmp_path / "evaluation_report.txt").read_text(encoding="utf-8")
+
+    assert result["independent_test"] is not None
+    assert result["independent_test"]["total"] == 6
+    assert "固定独立测试集结果" in report
+    assert (tmp_path / "independent_confusion_matrix.png").stat().st_size > 0

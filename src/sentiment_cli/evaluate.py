@@ -14,7 +14,11 @@ from sklearn.metrics import (
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from sentiment_cli.analyzer import SENTIMENTS, classify_text, silence_native_output
-from sentiment_cli.data_validation import load_labeled_csv, validate_labeled_data
+from sentiment_cli.data_validation import (
+    load_labeled_csv,
+    validate_dataset_separation,
+    validate_labeled_data,
+)
 from sentiment_cli.ml_model import train_sentiment_model
 
 
@@ -191,6 +195,7 @@ def _build_report(
     validation: dict[str, object],
     holdout: dict[str, object],
     cv_results: dict[str, object] | None,
+    independent_test: dict[str, object] | None,
 ) -> str:
     counts = validation["label_counts"]
     lines = [
@@ -233,6 +238,35 @@ def _build_report(
             ]
         )
 
+    if independent_test is not None:
+        test_counts = independent_test["validation"]["label_counts"]
+        lines.extend(
+            [
+                "",
+                "固定独立测试集结果：",
+                f"测试集来源: {independent_test['source']}",
+                f"测试集总量: {independent_test['total']}",
+                "测试集类别数量: "
+                + "，".join(f"{label}={test_counts[label]}" for label in SENTIMENTS),
+                "训练集与测试集清洗后重复: 0",
+                "说明: 独立测试集未用于训练、交叉验证、词典调整或参数选择。",
+                "词典法独立测试指标: "
+                + "，".join(
+                    f"{name}={independent_test['lexicon']['metrics'][name]:.4f}"
+                    for name in METRIC_NAMES
+                ),
+                "机器学习法独立测试指标: "
+                + "，".join(
+                    f"{name}={independent_test['ml']['metrics'][name]:.4f}"
+                    for name in METRIC_NAMES
+                ),
+                "词典法独立测试混淆矩阵:",
+                str(independent_test["lexicon"]["matrix"]),
+                "机器学习法独立测试混淆矩阵:",
+                str(independent_test["ml"]["matrix"]),
+            ]
+        )
+
     lines.extend(
         [
             "",
@@ -244,6 +278,43 @@ def _build_report(
     return "\n".join(lines)
 
 
+def _evaluate_independent_test(
+    training_data: pd.DataFrame,
+    test_data: pd.DataFrame,
+    text_column: str,
+    label_column: str,
+    source: str,
+) -> dict[str, object]:
+    validation = validate_labeled_data(test_data, text_column, label_column)
+    validate_dataset_separation(training_data, test_data, text_column)
+
+    training_texts = training_data[text_column].astype(str).tolist()
+    training_labels = training_data[label_column].astype(str).str.strip().tolist()
+    test_texts = test_data[text_column].astype(str).tolist()
+    test_labels = test_data[label_column].astype(str).str.strip().tolist()
+
+    lexicon_predictions = [classify_text(text) for text in test_texts]
+    model = train_sentiment_model(training_texts, training_labels)
+    ml_predictions = [str(item) for item in model.predict(test_texts)]
+    metric_labels = list(SENTIMENTS)
+
+    return {
+        "source": source,
+        "total": len(test_data),
+        "validation": validation,
+        "lexicon": {
+            "metrics": _calculate_metrics(test_labels, lexicon_predictions),
+            "matrix": confusion_matrix(
+                test_labels, lexicon_predictions, labels=metric_labels
+            ),
+        },
+        "ml": {
+            "metrics": _calculate_metrics(test_labels, ml_predictions),
+            "matrix": confusion_matrix(test_labels, ml_predictions, labels=metric_labels),
+        },
+    }
+
+
 def evaluate_sentiment_methods(
     data: pd.DataFrame,
     text_column: str = "comment",
@@ -252,6 +323,8 @@ def evaluate_sentiment_methods(
     test_size: float = 0.3,
     random_state: int = 42,
     cv_folds: int | None = None,
+    independent_data: pd.DataFrame | None = None,
+    independent_source: str = "固定独立测试集",
 ) -> dict[str, object]:
     if len(data) < 6:
         raise ValueError("样本量太少，至少需要 6 条带标签评论才能划分训练集和测试集")
@@ -320,12 +393,22 @@ def evaluate_sentiment_methods(
     if cv_folds is not None:
         cv_results = cross_validate_methods(texts, labels, cv_folds, random_state)
 
+    independent_test = None
+    if independent_data is not None:
+        independent_test = _evaluate_independent_test(
+            data,
+            independent_data,
+            text_column,
+            label_column,
+            independent_source,
+        )
+
     destination = Path(output_dir)
     try:
         destination.mkdir(parents=True, exist_ok=True)
         report_path = destination / "evaluation_report.txt"
         report_path.write_text(
-            _build_report(validation, holdout, cv_results),
+            _build_report(validation, holdout, cv_results, independent_test),
             encoding="utf-8",
         )
         chart_path = destination / "confusion_matrix.png"
@@ -338,6 +421,13 @@ def evaluate_sentiment_methods(
         metrics_path = destination / "metrics_comparison.png"
         if cv_results is not None:
             _save_metrics_comparison_chart(cv_results, metrics_path)
+        independent_chart_path = destination / "independent_confusion_matrix.png"
+        if independent_test is not None:
+            _save_confusion_matrix_chart(
+                independent_test["lexicon"]["matrix"],
+                independent_test["ml"]["matrix"],
+                independent_chart_path,
+            )
     except OSError as error:
         raise ValueError(f"无法写入输出目录：{destination}") from error
 
@@ -347,9 +437,13 @@ def evaluate_sentiment_methods(
         "used_stratify": used_stratify,
         "cv_folds": None if cv_results is None else cv_results["actual_folds"],
         "cv_results": cv_results,
+        "independent_test": independent_test,
         "report_path": report_path,
         "confusion_matrix_path": chart_path,
         "metrics_comparison_path": metrics_path if cv_results is not None else None,
+        "independent_confusion_matrix_path": (
+            independent_chart_path if independent_test is not None else None
+        ),
     }
 
 
@@ -361,8 +455,16 @@ def evaluate_csv(
     test_size: float = 0.3,
     random_state: int = 42,
     cv_folds: int | None = None,
+    test_input_path: str | Path | None = None,
 ) -> dict[str, object]:
     data, _ = load_labeled_csv(input_path, text_column, label_column)
+    independent_data = None
+    if test_input_path is not None:
+        independent_data, _ = load_labeled_csv(
+            test_input_path,
+            text_column,
+            label_column,
+        )
     return evaluate_sentiment_methods(
         data,
         text_column=text_column,
@@ -371,6 +473,8 @@ def evaluate_csv(
         test_size=test_size,
         random_state=random_state,
         cv_folds=cv_folds,
+        independent_data=independent_data,
+        independent_source=str(test_input_path) if test_input_path is not None else "",
     )
 
 
@@ -383,6 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-size", type=float, default=0.3, help="测试集比例")
     parser.add_argument("--random-state", type=int, default=42, help="随机种子")
     parser.add_argument("--cv-folds", type=int, default=5, help="分层交叉验证折数")
+    parser.add_argument("--test-input", help="固定独立测试集 CSV 路径")
     return parser
 
 
@@ -398,6 +503,7 @@ def main(argv: list[str] | None = None) -> None:
             test_size=args.test_size,
             random_state=args.random_state,
             cv_folds=args.cv_folds,
+            test_input_path=args.test_input,
         )
     except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))
